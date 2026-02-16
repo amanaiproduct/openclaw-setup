@@ -1,24 +1,33 @@
 # OpenClaw: Hardened Personal AI Setup
 
-A step-by-step setup prompt you can paste into **Claude Code** (or any coding agent) to install, configure, and harden [OpenClaw](https://openclaw.ai) on a Mac.
+A step-by-step setup prompt you can paste into **Claude Code** (or any coding agent) to install, configure, and harden [OpenClaw](https://openclaw.ai) on a Mac or Linux machine.
 
 OpenClaw turns Claude into a 24/7 personal AI assistant — persistent memory, tool access, and a direct line to your messaging apps (WhatsApp, Telegram, Slack, Discord, iMessage).
 
+## Quick Start
+
+Open a fresh **Claude Code** terminal and paste this:
+
+```
+Read https://raw.githubusercontent.com/amanaiproduct/openclaw-setup/main/PROMPT.md and follow every step. Ask me for my Anthropic API key when you need it.
+```
+
+That's it. The agent will walk you through installation, security hardening, and first-run setup.
+
 ## Prerequisites
 
-- **macOS** (Apple Silicon recommended; Intel works too)
-- **Homebrew** installed
+- **macOS or Linux** (macOS Apple Silicon recommended)
+- **Node.js 22+** and **npm**
 - **An Anthropic API key** from [console.anthropic.com](https://console.anthropic.com)
 - A phone with **WhatsApp** (or a Telegram bot token, or Slack app credentials)
 
-## Usage
+## What Happens
 
-1. Open a fresh **Claude Code** terminal (or any coding agent with shell access)
-2. Paste the contents of [`PROMPT.md`](./PROMPT.md) 
-3. Follow along — it'll ask for your API key and show a QR code to scan
-4. Send your first message: *"Hey, let's get you set up. Read BOOTSTRAP.md"*
-
-That's it. The prompt handles installation, security hardening, watchdog setup, and first-run configuration.
+1. The agent reads the setup prompt and installs OpenClaw
+2. It configures the gateway, API auth, and starts the service
+3. It connects your messaging channel (WhatsApp QR code, Telegram bot, etc.)
+4. You send your first message to start the identity/personality setup
+5. It hardens security: loopback binding, token auth, permissions, watchdog
 
 ## What It Does
 
