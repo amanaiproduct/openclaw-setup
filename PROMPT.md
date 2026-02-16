@@ -27,17 +27,21 @@ If the command isn't found after install, check that npm's global bin is in PATH
 echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
 
-### Step 3: Save Your Anthropic API Key (Recommended)
+### Step 3: Save Your Anthropic API Key
 
-Even if you're using Claude Code's OAuth, save your API key as an environment variable. OpenClaw reads it directly, and it acts as a fallback if OAuth logs out or isn't available:
+Ask the user for their Anthropic API key (from https://console.anthropic.com). Save it to their shell profile so it persists across sessions and is available to both OpenClaw and Claude Code:
 
 ```bash
-# Add to your shell profile so it persists across sessions
-echo 'export ANTHROPIC_API_KEY="your-key-here"' >> ~/.zshrc
-source ~/.zshrc
+# Detect the shell profile
+SHELL_PROFILE="${ZDOTDIR:-$HOME}/.zshrc"
+[ -f "$SHELL_PROFILE" ] || SHELL_PROFILE="$HOME/.bashrc"
+
+# Ask the user for their key, then write it once
+echo 'export ANTHROPIC_API_KEY="PASTE_KEY_HERE"' >> "$SHELL_PROFILE"
+source "$SHELL_PROFILE"
 ```
 
-Ask me for the key if you don't have it. Get one at https://console.anthropic.com
+This is a one-time setup. OpenClaw and the onboard wizard auto-detect `ANTHROPIC_API_KEY` from the environment — no need to pass it as a flag. It also acts as a fallback if Claude Code's OAuth session expires.
 
 ### Step 4: Run the Onboarding Wizard
 
@@ -49,7 +53,6 @@ openclaw onboard \
   --accept-risk \
   --auth-choice token \
   --token-provider anthropic \
-  --anthropic-api-key "$ANTHROPIC_API_KEY" \
   --gateway-bind loopback \
   --gateway-auth token \
   --gateway-token "$(openssl rand -hex 32)" \
@@ -107,14 +110,17 @@ openclaw gateway restart
 ### Step 6: Verify the Gateway is Running
 
 ```bash
-# Check the service
-launchctl list | grep openclaw
-
 # Health check
 openclaw health
 
 # Or directly:
 curl -sf http://127.0.0.1:18789/health && echo "✅ Gateway is up" || echo "❌ Gateway is down"
+
+# Check the service (macOS)
+launchctl list | grep openclaw
+
+# Check the service (Linux)
+# systemctl --user status openclaw-gateway
 ```
 
 If the gateway isn't running:
@@ -224,12 +230,12 @@ If there are critical issues, fix them before continuing.
 
 ### Step 12: Install the Watchdog
 
-The gateway can crash in ways launchd doesn't detect (process exists but unresponsive). A watchdog checks health every 2 minutes and restarts if needed.
+The gateway can crash in ways the service manager doesn't detect (process exists but unresponsive). A watchdog checks health every 2 minutes and restarts if needed.
 
 Create the watchdog script:
 
 ```bash
-cat > ~/.openclaw/watchdog.sh << 'EOF'
+cat > ~/.openclaw/watchdog.sh << 'WATCHDOG'
 #!/bin/bash
 # OpenClaw Gateway Watchdog
 GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
@@ -239,9 +245,19 @@ check_gateway() {
     curl -sf "http://127.0.0.1:${GATEWAY_PORT}/health" --max-time 5 >/dev/null 2>&1
 }
 
+restart_gateway() {
+    if command -v launchctl &>/dev/null; then
+        launchctl kickstart -k gui/$(id -u)/ai.openclaw.gateway
+    elif command -v systemctl &>/dev/null; then
+        systemctl --user restart openclaw-gateway
+    else
+        pkill -f "openclaw gateway" && sleep 1 && openclaw gateway &
+    fi
+}
+
 if ! check_gateway; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Gateway down - restarting" >> "$LOG_FILE"
-    launchctl kickstart -k gui/$(id -u)/ai.openclaw.gateway
+    restart_gateway
     sleep 5
     if check_gateway; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restart successful" >> "$LOG_FILE"
@@ -249,11 +265,11 @@ if ! check_gateway; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restart FAILED" >> "$LOG_FILE"
     fi
 fi
-EOF
+WATCHDOG
 chmod +x ~/.openclaw/watchdog.sh
 ```
 
-Create the watchdog LaunchAgent:
+**macOS** — install as a LaunchAgent:
 
 ```bash
 cat > ~/Library/LaunchAgents/ai.openclaw.watchdog.plist << EOF
@@ -275,8 +291,38 @@ cat > ~/Library/LaunchAgents/ai.openclaw.watchdog.plist << EOF
 </dict>
 </plist>
 EOF
-
 launchctl load ~/Library/LaunchAgents/ai.openclaw.watchdog.plist
+echo "✅ Watchdog installed (checks every 2 minutes)"
+```
+
+**Linux** — install as a systemd timer:
+
+```bash
+mkdir -p ~/.config/systemd/user
+
+cat > ~/.config/systemd/user/openclaw-watchdog.service << EOF
+[Unit]
+Description=OpenClaw Gateway Watchdog
+
+[Service]
+Type=oneshot
+ExecStart=%h/.openclaw/watchdog.sh
+EOF
+
+cat > ~/.config/systemd/user/openclaw-watchdog.timer << EOF
+[Unit]
+Description=OpenClaw Watchdog Timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable --now openclaw-watchdog.timer
 echo "✅ Watchdog installed (checks every 2 minutes)"
 ```
 
@@ -336,7 +382,7 @@ ls -la ~/.openclaw | head -3
 
 echo ""
 echo "=== Watchdog ==="
-launchctl list | grep watchdog
+launchctl list 2>/dev/null | grep watchdog || systemctl --user status openclaw-watchdog.timer 2>/dev/null || echo "Check watchdog manually"
 
 echo ""
 echo "=== Channels ==="
@@ -347,7 +393,7 @@ Everything should show:
 - ✅ Gateway healthy
 - ✅ 0 critical security issues
 - ✅ Config directory is `drwx------` (700)
-- ✅ Watchdog service loaded
+- ✅ Watchdog service loaded (launchctl on macOS, systemctl on Linux)
 - ✅ Channel connected
 
 You're done. Your personal AI assistant is running 24/7 with production-grade security.
