@@ -41,11 +41,11 @@ echo 'export ANTHROPIC_API_KEY="PASTE_KEY_HERE"' >> "$SHELL_PROFILE"
 source "$SHELL_PROFILE"
 ```
 
-This is a one-time setup. OpenClaw and the onboard wizard auto-detect `ANTHROPIC_API_KEY` from the environment — no need to pass it as a flag. It also acts as a fallback if Claude Code's OAuth session expires.
+This is a one-time setup. After sourcing, `ANTHROPIC_API_KEY` is available to all subsequent commands in this session — **do not re-export it with every command**. OpenClaw auto-detects it from the environment. It also acts as a fallback if Claude Code's OAuth session expires.
 
 ### Step 4: Run the Onboarding Wizard
 
-The wizard is interactive (TUI), which most coding agents can't drive. Use `--non-interactive` with flags instead:
+The wizard is interactive (TUI), which most coding agents can't drive. **Do NOT run `openclaw onboard` without flags** — it will hang on the TUI. Use `--non-interactive` instead:
 
 ```bash
 openclaw onboard \
@@ -53,20 +53,22 @@ openclaw onboard \
   --accept-risk \
   --auth-choice token \
   --token-provider anthropic \
+  --token "$ANTHROPIC_API_KEY" \
   --gateway-bind loopback \
   --gateway-auth token \
   --gateway-token "$(openssl rand -hex 32)" \
-  --install-daemon \
   --skip-channels \
   --skip-skills \
   --skip-ui
 ```
 
-This creates `~/.openclaw/openclaw.json` with all required fields, installs the launchd gateway service, and skips the interactive channel/skills/UI prompts (we'll set those up next).
+Note: `--install-daemon` only works on macOS (launchd) or Linux with systemd user services. On containers or VMs without systemd, omit it — we'll start the gateway manually in Step 6.
+
+This creates `~/.openclaw/openclaw.json` with all required fields and sets up the workspace with starter files (SOUL.md, AGENTS.md, BOOTSTRAP.md, etc.).
 
 **IMPORTANT:** Don't try to write `openclaw.json` from scratch — the schema has required fields (`meta`, `wizard`, `commands`, `plugins`) that aren't fully documented. Always let the wizard or `openclaw config set` handle it.
 
-If the user wants to run the wizard interactively instead (in their own terminal), they can just run `openclaw onboard` without the flags above.
+If the user wants to run the wizard interactively instead (in their own terminal), they can run `openclaw onboard` without flags — but this only works in a real terminal, not through a coding agent.
 
 ### Step 5: Connect a Messaging Channel
 
@@ -107,7 +109,20 @@ After connecting, restart the gateway to pick up channel changes:
 openclaw gateway restart
 ```
 
-### Step 6: Verify the Gateway is Running
+### Step 6: Start and Verify the Gateway
+
+If the daemon was installed (macOS launchd or Linux systemd), it may already be running. If not, start it manually:
+
+```bash
+# Try starting via service manager first
+openclaw gateway start 2>/dev/null || true
+
+# If that fails (containers, no systemd), start in background:
+nohup openclaw gateway > /tmp/openclaw-gateway.log 2>&1 &
+sleep 3
+```
+
+Verify it's up:
 
 ```bash
 # Health check
@@ -115,17 +130,6 @@ openclaw health
 
 # Or directly:
 curl -sf http://127.0.0.1:18789/health && echo "✅ Gateway is up" || echo "❌ Gateway is down"
-
-# Check the service (macOS)
-launchctl list | grep openclaw
-
-# Check the service (Linux)
-# systemctl --user status openclaw-gateway
-```
-
-If the gateway isn't running:
-```bash
-openclaw gateway start
 ```
 
 ### Step 7: Verify Channel Connection
@@ -144,9 +148,15 @@ Send a test message from your phone. If the agent responds, Phase 1 is done.
 
 ## Phase 2: First Contact
 
-Send this as your first message from your phone:
+If a messaging channel is connected (WhatsApp, Telegram, etc.), send this as your first message from your phone:
 
 > "Hey, let's get you set up. Read BOOTSTRAP.md and let's figure out who you are."
+
+If no channel is connected yet (CLI-only setup), you can talk to the agent directly:
+
+```bash
+openclaw agent --local --agent main --message "Hey, let's get you set up. Read BOOTSTRAP.md and let's figure out who you are."
+```
 
 The agent will:
 1. Read BOOTSTRAP.md and start the identity conversation
@@ -155,6 +165,8 @@ The agent will:
 4. Fill in IDENTITY.md and USER.md
 5. Walk through SOUL.md together
 6. Delete BOOTSTRAP.md when done
+
+You can continue the conversation with `openclaw agent --local --agent main --message "your reply here"` or via your messaging app.
 
 Have a real conversation with it. This is where the agent becomes *yours* — not a generic chatbot.
 
