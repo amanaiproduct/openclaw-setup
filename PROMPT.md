@@ -41,23 +41,70 @@ Ask me for the key if you don't have it. Get one at https://console.anthropic.co
 
 ### Step 4: Run the Onboarding Wizard
 
+The wizard is interactive (TUI), which most coding agents can't drive. Use `--non-interactive` with flags instead:
+
 ```bash
-openclaw onboard
+openclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --auth-choice token \
+  --token-provider anthropic \
+  --anthropic-api-key "$ANTHROPIC_API_KEY" \
+  --gateway-bind loopback \
+  --gateway-auth token \
+  --gateway-token "$(openssl rand -hex 32)" \
+  --install-daemon \
+  --skip-channels \
+  --skip-skills \
+  --skip-ui
 ```
 
-This is interactive. It will:
-1. Ask for your **Anthropic API key** — paste it when prompted (or it auto-detects from `ANTHROPIC_API_KEY` if you set it in Step 3)
-2. Ask which **messaging channel** to connect (WhatsApp, Telegram, Slack, etc.)
-3. Show a **QR code** if WhatsApp is selected — scan it with your phone
-4. Create `~/.openclaw/openclaw.json` with all required config
-5. Set up the agent **workspace** directory with starter files (SOUL.md, AGENTS.md, etc.)
-6. Optionally install the **gateway launchd service**
+This creates `~/.openclaw/openclaw.json` with all required fields, installs the launchd gateway service, and skips the interactive channel/skills/UI prompts (we'll set those up next).
 
-**IMPORTANT:** Let the wizard create the config. Don't try to write `openclaw.json` from scratch — the schema has required fields (`meta`, `wizard`, `commands`, `plugins`) that aren't fully documented.
+**IMPORTANT:** Don't try to write `openclaw.json` from scratch — the schema has required fields (`meta`, `wizard`, `commands`, `plugins`) that aren't fully documented. Always let the wizard or `openclaw config set` handle it.
 
-Follow all prompts. When it asks about the gateway service, say **yes** — this makes OpenClaw start automatically on boot.
+If the user wants to run the wizard interactively instead (in their own terminal), they can just run `openclaw onboard` without the flags above.
 
-### Step 5: Verify the Gateway is Running
+### Step 5: Connect a Messaging Channel
+
+Ask the user which channel they want: **WhatsApp** (personal), **Telegram** (bot), **Slack**, or **Discord**.
+
+**WhatsApp** (most common for personal use):
+```bash
+openclaw channels login --channel whatsapp --verbose
+```
+This prints a QR code in the terminal. The user needs to scan it with their phone (WhatsApp > Linked Devices > Link a Device). Wait for "connected" in the output.
+
+**Telegram:**
+Ask the user for their bot token (from @BotFather), then:
+```bash
+openclaw config set channels.telegram.enabled true
+openclaw config set channels.telegram.botToken "BOT_TOKEN_HERE"
+```
+
+**Slack:**
+Ask the user for their Slack App Token and Bot Token, then:
+```bash
+openclaw config set channels.slack.enabled true
+openclaw config set channels.slack.mode socket
+openclaw config set channels.slack.appToken "xapp-..."
+openclaw config set channels.slack.botToken "xoxb-..."
+openclaw config set channels.slack.groupPolicy open
+```
+
+**Discord:**
+Ask the user for their Discord bot token, then:
+```bash
+openclaw config set channels.discord.enabled true
+openclaw config set channels.discord.botToken "BOT_TOKEN_HERE"
+```
+
+After connecting, restart the gateway to pick up channel changes:
+```bash
+openclaw gateway restart
+```
+
+### Step 6: Verify the Gateway is Running
 
 ```bash
 # Check the service
@@ -75,7 +122,7 @@ If the gateway isn't running:
 openclaw gateway start
 ```
 
-### Step 6: Verify Channel Connection
+### Step 7: Verify Channel Connection
 
 ```bash
 # List connected channels
@@ -113,7 +160,7 @@ Once you're happy with the identity setup, move to Phase 3.
 
 Now that everything works, lock it down. These are lessons from running OpenClaw in production 24/7.
 
-### Step 7: File Permissions
+### Step 8: File Permissions
 
 ```bash
 chmod 700 ~/.openclaw
@@ -123,7 +170,7 @@ chmod 600 ~/.openclaw/openclaw.json
 ls -la ~/.openclaw/ | head -5
 ```
 
-### Step 8: Gateway Security
+### Step 9: Gateway Security
 
 ```bash
 # Ensure gateway only listens on localhost (not your whole network)
@@ -144,7 +191,7 @@ if [ -z "$CURRENT_TOKEN" ] || [ "$CURRENT_TOKEN" = "undefined" ]; then
 fi
 ```
 
-### Step 9: Group Chat Safety
+### Step 10: Group Chat Safety
 
 Prevent the bot from speaking unprompted in group chats:
 
@@ -161,7 +208,7 @@ For Telegram (if using):
 openclaw config set channels.telegram.groupPolicy allowlist
 ```
 
-### Step 10: Run the Security Audit
+### Step 11: Run the Security Audit
 
 ```bash
 openclaw security audit
@@ -175,7 +222,7 @@ Review the output. You want:
 
 If there are critical issues, fix them before continuing.
 
-### Step 11: Install the Watchdog
+### Step 12: Install the Watchdog
 
 The gateway can crash in ways launchd doesn't detect (process exists but unresponsive). A watchdog checks health every 2 minutes and restarts if needed.
 
@@ -233,7 +280,7 @@ launchctl load ~/Library/LaunchAgents/ai.openclaw.watchdog.plist
 echo "✅ Watchdog installed (checks every 2 minutes)"
 ```
 
-### Step 12: Add Security Rules to the Workspace
+### Step 13: Add Security Rules to the Workspace
 
 Find the agent workspace:
 ```bash
@@ -271,7 +318,7 @@ Append these security rules to `$WORKSPACE/AGENTS.md` (don't overwrite — add t
 - You're a participant, not the owner's voice
 ```
 
-### Step 13: Final Verification
+### Step 14: Final Verification
 
 Run the full check:
 
