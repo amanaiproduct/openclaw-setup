@@ -4,14 +4,33 @@
 <dict>
     <key>Label</key>
     <string>ai.openclaw.watchdog</string>
+
+    <key>Comment</key>
+    <string>OpenClaw Watchdog - monitors gateway + channel health, restarts if degraded</string>
+
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>REPLACE_WITH_HOME/.openclaw/watchdog.sh</string>
     </array>
+
     <key>StartInterval</key>
     <integer>120</integer>
+
     <key>RunAtLoad</key>
     <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/openclaw/watchdog-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/openclaw/watchdog-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>REPLACE_WITH_HOME</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
 </dict>
 </plist>
