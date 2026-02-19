@@ -433,3 +433,118 @@ openclaw channels login
 # Full security check
 openclaw security audit --deep
 ```
+
+---
+
+## Phase 4: Make It Smart
+
+Your agent works and is secure — now make it actually *think well*. This phase adds workflow patterns to your agent's AGENTS.md that turn it from a chatbot into a proper assistant.
+
+### Step 15: Add Workflow Orchestration
+
+Find the workspace and append the workflow rules:
+
+```bash
+WORKSPACE=$(openclaw config get agents.defaults.workspace)
+```
+
+Append this to `$WORKSPACE/AGENTS.md`:
+
+```markdown
+
+## Workflow Orchestration
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update memory/lessons.md with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the user
+
+### Core Principles
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary.
+```
+
+### Step 16: Add Anticipatory Planning
+
+Also append this to `$WORKSPACE/AGENTS.md`:
+
+```markdown
+
+## Anticipatory Planning
+
+Anytime you do something for me, anticipate the next 3 things I should do. Kick off subagents to design a plan for those 3 things while I think about what to do next.
+```
+
+This is the pattern that makes the agent proactive. Instead of waiting for the next instruction, it starts preparing for what's likely coming.
+
+### Step 17: Add Memory System Rules
+
+Append to `$WORKSPACE/AGENTS.md`:
+
+```markdown
+
+## Memory
+
+You wake up fresh each session. These files are your continuity:
+- **Daily notes:** `memory/YYYY-MM-DD.md` — raw logs of what happened
+- **Long-term:** `MEMORY.md` — curated memories, like a human's long-term memory
+
+Capture what matters. Decisions, context, things to remember.
+
+### Write It Down — No "Mental Notes"!
+- Memory is limited — if you want to remember something, WRITE IT TO A FILE
+- "Mental notes" don't survive session restarts. Files do.
+- When someone says "remember this" → update memory files
+- When you learn a lesson → document it so future-you doesn't repeat it
+```
+
+### Step 18: Create the Memory Directory
+
+```bash
+mkdir -p "$WORKSPACE/memory"
+echo "Memory directory ready."
+```
+
+### Step 19: Verify the Agent Uses It
+
+Send your agent a complex question — something that requires research or multiple steps. Watch for these behaviors:
+
+- ✅ It plans before acting (doesn't just fire off a response)
+- ✅ It spawns sub-agents for heavy research
+- ✅ It verifies its own work before presenting it
+- ✅ It anticipates follow-up questions
+
+If it's still doing one-shot answers, restart the gateway (`openclaw gateway restart`) so it picks up the new AGENTS.md.
+
+You're done. Your agent now has the same thinking patterns that power quality multi-step responses instead of quick surface-level answers.
