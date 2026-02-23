@@ -242,9 +242,12 @@ If there are critical issues, fix them before continuing.
 
 ### Step 12: Install the Watchdog
 
-The gateway can fail in ways the service manager doesn't detect. The most common failure mode: the gateway **process** stays alive (launchd's `KeepAlive` sees it as healthy), but a **channel inside it** dies — e.g. WhatsApp WebSocket timeout. A simple `curl /health` won't catch this because the HTTP endpoint still responds.
+The gateway can fail in ways the service manager doesn't detect. There are two failure modes:
 
-The watchdog uses `openclaw health` to check each channel's actual connection state, and supports monitoring multiple profiles (e.g. a main WhatsApp profile + a separate Slack profile).
+1. **Channel disconnect** — a channel (e.g. WhatsApp WebSocket) dies inside a running gateway. `curl /health` still passes because the process is alive.
+2. **Silent listener death** — even `openclaw health` reports "WhatsApp: linked" but the message listener has silently stopped. The gateway log stops being written to, but every other health signal looks fine.
+
+The watchdog checks both: it uses `openclaw health` for channel status, and monitors the gateway log file's modification time to catch the silent death (the gateway writes periodic "Listening" lines every 30-90 min, so a 2-hour gap means something is wrong). It supports monitoring multiple profiles (e.g. a main WhatsApp profile + a separate Slack profile).
 
 Copy the watchdog script from this repo's `config/watchdog.sh`, or create it:
 
@@ -253,6 +256,7 @@ cat > ~/.openclaw/watchdog.sh << 'WATCHDOG'
 #!/bin/bash
 # OpenClaw Gateway Watchdog
 # Checks gateway AND channel-level health, restarts if degraded.
+# Also checks gateway log freshness to catch silent listener death.
 
 CLI="/opt/homebrew/bin/openclaw"
 LOG_FILE="/tmp/openclaw/watchdog.log"
@@ -260,6 +264,10 @@ LOCK_FILE="/tmp/openclaw-watchdog.lock"
 
 # Set to your phone number for WhatsApp notifications, or leave empty to skip
 NOTIFY_PHONE=""
+
+# Max seconds since last gateway log write before considering it stale.
+# WhatsApp "Listening" lines appear every ~30-90 min, so 2 hours is safe.
+STALE_THRESHOLD_SECONDS=7200
 
 mkdir -p /tmp/openclaw
 
@@ -299,12 +307,22 @@ check_channel_health() {
     echo "ok"; return 0
 }
 
+check_log_freshness() {
+    local log_path="$1"
+    [ ! -f "$log_path" ] && echo "log_missing" && return 1
+    local now last_mod age
+    now=$(date +%s)
+    last_mod=$(stat -f%m "$log_path" 2>/dev/null || stat -c%Y "$log_path" 2>/dev/null || echo 0)
+    age=$((now - last_mod))
+    if [ "$age" -gt "$STALE_THRESHOLD_SECONDS" ]; then echo "log_stale_${age}s"; return 1; fi
+    echo "fresh"; return 0
+}
+
 restart_profile() {
     local profile_flag="$1" label="$2"
     log "Restarting $label gateway..."
     $CLI $profile_flag gateway stop 2>/dev/null || true
     sleep 3
-    # Reinstall to pick up entrypoint changes (common after updates)
     $CLI $profile_flag gateway install 2>/dev/null
     sleep 8
     local result; result=$(check_channel_health "$profile_flag")
@@ -320,21 +338,38 @@ send_notification() {
 }
 
 check_and_fix_profile() {
-    local profile_flag="$1" label="$2"
+    local profile_flag="$1" label="$2" log_path="$3"
+
+    # Layer 1: channel-level health
     local result; result=$(check_channel_health "$profile_flag")
-    [ "$result" = "ok" ] && return 0
-    log "$label health check failed: $result"
-    if restart_profile "$profile_flag" "$label"; then
-        send_notification "[watchdog] $label was degraded ($result) and auto-restarted at $(date '+%H:%M')"
-    else
-        send_notification "[watchdog] $label is degraded ($result) and failed to recover. Manual intervention needed."
+    if [ "$result" != "ok" ]; then
+        log "$label health check failed: $result"
+        if restart_profile "$profile_flag" "$label"; then
+            send_notification "[watchdog] $label was degraded ($result) and auto-restarted at $(date '+%H:%M')"
+        else
+            send_notification "[watchdog] $label is degraded ($result) and failed to recover."
+        fi
+        return
+    fi
+
+    # Layer 2: log freshness (catches silent listener death)
+    if [ -n "$log_path" ]; then
+        local freshness; freshness=$(check_log_freshness "$log_path")
+        if [ "$freshness" != "fresh" ]; then
+            log "$label log stale ($freshness) despite healthy status — restarting"
+            if restart_profile "$profile_flag" "$label"; then
+                send_notification "[watchdog] $label was silently stale ($freshness) and auto-restarted at $(date '+%H:%M')"
+            else
+                send_notification "[watchdog] $label is silently stale ($freshness) and failed to recover."
+            fi
+        fi
     fi
 }
 
-# Check each profile
-check_and_fix_profile "" "main"
+# Check each profile (pass gateway log path as 3rd arg for staleness detection)
+check_and_fix_profile "" "main" "$HOME/.openclaw/logs/gateway.log"
 # Add additional profiles here:
-# check_and_fix_profile "--profile my-slack" "my-slack"
+# check_and_fix_profile "--profile my-slack" "my-slack" "$HOME/.openclaw-my-slack/logs/gateway.log"
 WATCHDOG
 chmod +x ~/.openclaw/watchdog.sh
 ```

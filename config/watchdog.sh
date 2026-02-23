@@ -2,11 +2,17 @@
 # OpenClaw Gateway Watchdog
 # Checks gateway AND channel-level health, restarts if degraded.
 #
-# Why channel-level checks matter:
-# The gateway process can stay alive (launchd KeepAlive sees it as healthy)
-# while a channel inside it dies — e.g. WhatsApp WebSocket timeout.
-# A simple curl to /health won't catch this. `openclaw health` checks
-# each channel's actual connection state.
+# Three layers of health checking:
+# 1. `openclaw health` — catches channel disconnects/errors
+# 2. Gateway log staleness — catches the silent death where health says
+#    "linked" but the message listener has stopped (no log writes for hours)
+# 3. Process check — catches full gateway crashes (handled by launchd KeepAlive)
+#
+# Why log staleness matters:
+# The gateway process can stay alive and `openclaw health` can report
+# "WhatsApp: linked" even when the message listener has silently died.
+# The gateway log gets periodic "Listening" lines every 30-90 min,
+# so if the log hasn't been touched in 2 hours, something is wrong.
 #
 # Supports multiple profiles (e.g. main + a Slack-only profile).
 # Runs via LaunchAgent/systemd every 2 minutes.
@@ -17,6 +23,10 @@ LOCK_FILE="/tmp/openclaw-watchdog.lock"
 
 # Set to your phone number for WhatsApp notifications, or leave empty to skip
 NOTIFY_PHONE=""
+
+# Max seconds since last gateway log write before considering it stale.
+# WhatsApp "Listening" lines appear every ~30-90 min, so 2 hours is safe.
+STALE_THRESHOLD_SECONDS=7200
 
 mkdir -p /tmp/openclaw
 
@@ -84,6 +94,31 @@ check_channel_health() {
     return 0
 }
 
+# Check if the gateway log file has been written to recently.
+# Catches the silent death where health reports "linked" but the
+# message listener has stopped processing.
+check_log_freshness() {
+    local log_path="$1"
+
+    if [ ! -f "$log_path" ]; then
+        echo "log_missing"
+        return 1
+    fi
+
+    local now last_mod age
+    now=$(date +%s)
+    last_mod=$(stat -f%m "$log_path" 2>/dev/null || stat -c%Y "$log_path" 2>/dev/null || echo 0)
+    age=$((now - last_mod))
+
+    if [ "$age" -gt "$STALE_THRESHOLD_SECONDS" ]; then
+        echo "log_stale_${age}s"
+        return 1
+    fi
+
+    echo "fresh"
+    return 0
+}
+
 restart_profile() {
     local profile_flag="$1"
     local label="$2"
@@ -121,29 +156,46 @@ send_notification() {
 check_and_fix_profile() {
     local profile_flag="$1"  # "" for main, "--profile <name>" for others
     local label="$2"
+    local log_path="$3"      # path to gateway log file for staleness check
 
+    # Layer 1: channel-level health
     local result
     result=$(check_channel_health "$profile_flag")
 
-    if [ "$result" = "ok" ]; then
-        return 0
+    if [ "$result" != "ok" ]; then
+        log "$label health check failed: $result"
+        if restart_profile "$profile_flag" "$label"; then
+            send_notification "[watchdog] $label was degraded ($result) and auto-restarted at $(date '+%H:%M')"
+        else
+            send_notification "[watchdog] $label is degraded ($result) and failed to recover. Manual intervention needed."
+        fi
+        return
     fi
 
-    log "$label health check failed: $result"
-
-    if restart_profile "$profile_flag" "$label"; then
-        send_notification "[watchdog] $label gateway was degraded ($result) and auto-restarted at $(date '+%H:%M')"
-    else
-        send_notification "[watchdog] $label gateway is degraded ($result) and failed to auto-recover. Manual intervention needed."
+    # Layer 2: log freshness (catches silent listener death)
+    if [ -n "$log_path" ]; then
+        local freshness
+        freshness=$(check_log_freshness "$log_path")
+        if [ "$freshness" != "fresh" ]; then
+            log "$label gateway log stale ($freshness) despite healthy status — restarting"
+            if restart_profile "$profile_flag" "$label"; then
+                send_notification "[watchdog] $label was silently stale ($freshness) and auto-restarted at $(date '+%H:%M')"
+            else
+                send_notification "[watchdog] $label is silently stale ($freshness) and failed to recover."
+            fi
+            return
+        fi
     fi
 }
 
 main() {
-    # Check the default profile
-    check_and_fix_profile "" "main"
+    # Check the default profile.
+    # Pass the gateway log path as the third argument for staleness detection.
+    # Adjust the path to match your setup (openclaw gateway install writes logs here).
+    check_and_fix_profile "" "main" "$HOME/.openclaw/logs/gateway.log"
 
     # Add additional profiles here, e.g.:
-    # check_and_fix_profile "--profile my-slack" "my-slack"
+    # check_and_fix_profile "--profile my-slack" "my-slack" "$HOME/.openclaw-my-slack/logs/gateway.log"
 }
 
 main
