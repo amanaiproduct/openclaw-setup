@@ -614,7 +614,23 @@ Anytime you do something for me, anticipate the next 3 things I should do. Kick 
 
 This is the pattern that makes the agent proactive. Instead of waiting for the next instruction, it starts preparing for what's likely coming.
 
-### Step 17: Add Memory System Rules
+### Step 17: Add Workspace Hygiene
+
+Append to `$WORKSPACE/AGENTS.md`:
+
+```markdown
+
+## Workspace Hygiene
+
+- Every new project gets its own directory in the workspace root
+- When a project is done, move it to `archive/`
+- Never leave temp files or scratch outputs in root
+- Keep root clean: only config files, active projects, memory, and skills
+```
+
+This keeps the workspace navigable across sessions. Without it, agents leave files everywhere and root becomes a junk drawer.
+
+### Step 18: Add Memory System Rules
 
 Append to `$WORKSPACE/AGENTS.md`:
 
@@ -635,14 +651,14 @@ Capture what matters. Decisions, context, things to remember.
 - When you learn a lesson → document it so future-you doesn't repeat it
 ```
 
-### Step 18: Create the Memory Directory
+### Step 19: Create the Memory Directory
 
 ```bash
 mkdir -p "$WORKSPACE/memory"
 echo "Memory directory ready."
 ```
 
-### Step 19: Verify the Agent Uses It
+### Step 20: Verify the Agent Uses It
 
 Send your agent a complex question — something that requires research or multiple steps. Watch for these behaviors:
 
