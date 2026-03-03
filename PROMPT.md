@@ -630,35 +630,7 @@ Append to `$WORKSPACE/AGENTS.md`:
 
 This keeps the workspace navigable across sessions. Without it, agents leave files everywhere and root becomes a junk drawer.
 
-### Step 18: Add Memory System Rules
-
-Append to `$WORKSPACE/AGENTS.md`:
-
-```markdown
-
-## Memory
-
-You wake up fresh each session. These files are your continuity:
-- **Daily notes:** `memory/YYYY-MM-DD.md` — raw logs of what happened
-- **Long-term:** `MEMORY.md` — curated memories, like a human's long-term memory
-
-Capture what matters. Decisions, context, things to remember.
-
-### Write It Down — No "Mental Notes"!
-- Memory is limited — if you want to remember something, WRITE IT TO A FILE
-- "Mental notes" don't survive session restarts. Files do.
-- When someone says "remember this" → update memory files
-- When you learn a lesson → document it so future-you doesn't repeat it
-```
-
-### Step 19: Create the Memory Directory
-
-```bash
-mkdir -p "$WORKSPACE/memory"
-echo "Memory directory ready."
-```
-
-### Step 20: Verify the Agent Uses It
+### Step 18: Verify the Agent Uses It
 
 Send your agent a complex question — something that requires research or multiple steps. Watch for these behaviors:
 
