@@ -4,7 +4,7 @@ Step-by-step setup prompts you can paste into **any coding agent** (Claude Code,
 
 Two guides — pick one:
 
-| | [OpenClaw](PROMPT.md) | [Hermes](HERMES.md) |
+| | [OpenClaw](PROMPT.md) | [Hermes](HERMES-SETUP.md) |
 |---|---------|--------|
 | **Runtime** | Node.js | Python |
 | **By** | [OpenClaw](https://openclaw.ai) | [Nous Research](https://nousresearch.com) |
@@ -23,7 +23,7 @@ Both connect to WhatsApp, Telegram, Discord, Slack, and more. Both run as 24/7 b
 Open a coding agent and paste:
 
 ```
-Read https://raw.githubusercontent.com/amanaiproduct/openclaw-setup/main/HERMES.md and follow every step. Ask me for my Anthropic API key when you need it.
+Read https://raw.githubusercontent.com/amanaiproduct/openclaw-setup/main/HERMES-SETUP.md and follow every step. Ask me for my Anthropic API key when you need it.
 ```
 
 ### OpenClaw
@@ -45,7 +45,7 @@ Read https://raw.githubusercontent.com/amanaiproduct/openclaw-setup/main/PROMPT.
 ```
 ├── README.md                          ← You're here
 ├── PROMPT.md                          ← OpenClaw setup guide
-├── HERMES.md                          ← Hermes Agent setup guide
+├── HERMES-SETUP.md                    ← Hermes Agent setup guide
 └── config/
     ├── ai.openclaw.gateway.plist      ← OpenClaw LaunchAgent
     ├── ai.openclaw.watchdog.plist     ← OpenClaw watchdog LaunchAgent
@@ -62,7 +62,7 @@ Hermes has a built-in migration tool:
 hermes claw migrate
 ```
 
-See the [migration section](HERMES.md#migrating-from-openclaw) in the Hermes guide for details.
+See the [migration section](HERMES-SETUP.md#migrating-from-openclaw) in the Hermes guide for details.
 
 ## Links
 

@@ -76,6 +76,11 @@ hermes config set model.default claude-sonnet-4
 hermes config set model.provider anthropic
 ```
 
+Set approvals to smart so the agent can auto-approve safe commands (an LLM gates dangerous ones):
+```bash
+hermes config set approvals.mode smart
+```
+
 This creates `~/.hermes/config.yaml`. Unlike OpenClaw's `openclaw.json` (which has a complex schema you can't hand-edit), Hermes uses plain YAML that's safe to edit directly with `hermes config edit`.
 
 ### Step 5: Connect a Messaging Channel
@@ -601,7 +606,15 @@ WORKFLOW
 echo "✅ Workflow patterns appended to SOUL.md"
 ```
 
-### Step 19: Verify the Agent Uses It
+### Step 19: Enable Tool-Use Enforcement for Claude
+
+Hermes has built-in tool-use enforcement guidance (don't give up, keep working, verify results) but it's only enabled for GPT/Gemini/Grok by default. Add Claude to the list:
+
+```bash
+sed -i '' 's/TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok")/TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "claude", "sonnet", "opus", "haiku")/' ~/.hermes/hermes-agent/agent/prompt_builder.py
+```
+
+### Step 20: Verify the Agent Uses It
 
 Start a fresh session and test with a complex question:
 
